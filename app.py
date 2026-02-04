@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from openpyxl.utils import get_column_letter
 
 st.title("Weekly Habanero Report Generator")
 
@@ -9,6 +10,12 @@ st.title("Weekly Habanero Report Generator")
 # --------------------------------------------------
 client = st.text_input("Client name (e.g. Wray's)")
 report_number = st.text_input("Report number (e.g. 8)")
+
+region = st.selectbox(
+    "Client region",
+    options=["US", "AU"],
+    index=0
+)
 
 weekly_file = st.file_uploader(
     "Upload Weekly Data Pull",
@@ -38,11 +45,18 @@ if st.button("Generate Report"):
     )
     weekly = weekly.dropna(subset=["Date"])
 
+    raw_start = weekly["Date"].min()
+    raw_end = weekly["Date"].max()
+
     # ----------------------------------------------
-    # Day -1 shifted, month-aware date range
+    # Region-aware date logic
     # ----------------------------------------------
-    start_date = weekly["Date"].min() - pd.Timedelta(days=1)
-    end_date = weekly["Date"].max() - pd.Timedelta(days=1)
+    if region == "US":
+        start_date = raw_start - pd.Timedelta(days=1)
+        end_date = raw_end - pd.Timedelta(days=1)
+    else:  # AU
+        start_date = raw_start
+        end_date = raw_end
 
     if start_date.month == end_date.month:
         date_range = f"{start_date.strftime('%b %-d')} - {end_date.strftime('%-d')}"
@@ -119,6 +133,19 @@ if st.button("Generate Report"):
 
             # Reach whole-number display
             row[reach_col - 1].number_format = "#,##0"
+
+        # ------------------------------------------
+        # Auto-adjust column widths
+        # ------------------------------------------
+        for col_idx, col_name in enumerate(merged.columns, start=1):
+            column_letter = get_column_letter(col_idx)
+            max_length = len(str(col_name))
+
+            for cell in ws[column_letter]:
+                if cell.value is not None:
+                    max_length = max(max_length, len(str(cell.value)))
+
+            ws.column_dimensions[column_letter].width = max_length + 2
 
     st.download_button(
         label="Download Excel File",
